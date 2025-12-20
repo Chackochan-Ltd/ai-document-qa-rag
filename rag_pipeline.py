@@ -1,6 +1,3 @@
-from langchain.document_loaders import PyPDFLoader
-
-
 def split_documents(documents):
     from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -10,16 +7,19 @@ def split_documents(documents):
     )
     return splitter.split_documents(documents)
 
+
 def create_embeddings():
-    from langchain.embeddings.openai import OpenAIEmbeddings
+    from langchain_openai import OpenAIEmbeddings
     return OpenAIEmbeddings()
 
+
 def build_vectorstore(chunks, embeddings):
-    from langchain.vectorstores import FAISS
+    from langchain_community.vectorstores import FAISS
     return FAISS.from_documents(chunks, embeddings)
 
+
 def build_qa_chain(vectorstore):
-    from langchain.chat_models import ChatOpenAI
+    from langchain_openai import ChatOpenAI
     from langchain.chains import RetrievalQA
 
     llm = ChatOpenAI(temperature=0)
