@@ -1,10 +1,13 @@
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_community.vectorstores import FAISS
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.chains import RetrievalQA
+
+
 def split_documents(documents):
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
+        chunk_size=500,
+        chunk_overlap=100
     )
     return splitter.split_documents(documents)
 
@@ -14,7 +17,6 @@ def create_embeddings():
 
 
 def build_vectorstore(chunks, embeddings):
-    from langchain_community.vectorstores import FAISS
     return FAISS.from_documents(chunks, embeddings)
 
 
@@ -30,11 +32,9 @@ def build_qa_chain(vectorstore):
     )
 
 
-
 def create_rag_pipeline(documents):
     chunks = split_documents(documents)
     embeddings = create_embeddings()
     vectorstore = build_vectorstore(chunks, embeddings)
     qa_chain = build_qa_chain(vectorstore)
-
     return qa_chain
