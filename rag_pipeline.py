@@ -10,8 +10,7 @@ def split_documents(documents):
 
 
 def create_embeddings():
-    from langchain_openai import OpenAIEmbeddings
-    return OpenAIEmbeddings()
+    return GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
 
 def build_vectorstore(chunks, embeddings):
@@ -20,15 +19,16 @@ def build_vectorstore(chunks, embeddings):
 
 
 def build_qa_chain(vectorstore):
-    from langchain_openai import ChatOpenAI
-    from langchain.chains import RetrievalQA
-
-    llm = ChatOpenAI(temperature=0)
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-pro",
+        temperature=0
+    )
 
     return RetrievalQA.from_chain_type(
         llm=llm,
         retriever=vectorstore.as_retriever()
     )
+
 
 
 def create_rag_pipeline(documents):

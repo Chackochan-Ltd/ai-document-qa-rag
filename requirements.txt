@@ -7,3 +7,4 @@ pypdf
 streamlit
 python-dotenv
 tiktoken
+langchain-google-genai
