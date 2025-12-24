@@ -1,5 +1,3 @@
-
-import os
 import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader
 
@@ -28,8 +26,12 @@ if uploaded_file is not None:
         loader = PyPDFLoader("temp.pdf")
         documents = loader.load()
 
-        # Create RAG pipeline
-        qa_chain = create_rag_pipeline(documents)
+        # ✅ CREATE RAG PIPELINE WITH SAFETY
+        try:
+            qa_chain = create_rag_pipeline(documents)
+        except ValueError as e:
+            st.error(str(e))
+            st.stop()
 
     st.success("Document processed successfully!")
 
@@ -39,7 +41,7 @@ if uploaded_file is not None:
 
     if question:
         with st.spinner("Generating answer..."):
-           answer = qa_chain.invoke(question)
+            answer = qa_chain.invoke(question)
 
         st.subheader("Answer")
         st.write(answer)

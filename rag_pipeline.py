@@ -27,7 +27,16 @@ def create_embeddings():
 
 # ------------------ Vector Store ------------------
 def build_vectorstore(chunks, embeddings):
-    return FAISS.from_documents(chunks, embeddings)
+    texts = [doc.page_content for doc in chunks if doc.page_content.strip()]
+
+    if not texts:
+        raise ValueError(
+            "No text could be extracted from the PDF. "
+            "The document may be scanned or image-based."
+        )
+
+    return FAISS.from_texts(texts, embeddings)
+
 
 
 # ------------------ RAG Chain (LCEL – Modern & Stable) ------------------
