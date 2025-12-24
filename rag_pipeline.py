@@ -1,9 +1,7 @@
-from langchain_google_genai import (
-    GoogleGenerativeAIEmbeddings,
-    ChatGoogleGenerativeAI
-)
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -11,6 +9,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
 
+# ------------------ Document Chunking ------------------
 def split_documents(documents):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
@@ -19,14 +18,19 @@ def split_documents(documents):
     return splitter.split_documents(documents)
 
 
+# ------------------ Embeddings (LOCAL, STABLE) ------------------
 def create_embeddings():
-    return GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
 
+# ------------------ Vector Store ------------------
 def build_vectorstore(chunks, embeddings):
     return FAISS.from_documents(chunks, embeddings)
 
 
+# ------------------ RAG Chain (LCEL – Modern & Stable) ------------------
 def build_rag_chain(vectorstore):
     retriever = vectorstore.as_retriever()
 
@@ -37,7 +41,8 @@ def build_rag_chain(vectorstore):
 
     prompt = ChatPromptTemplate.from_template(
         """
-        Answer the question using ONLY the context below.
+        Answer the question using ONLY the context provided below.
+        If the answer is not present in the context, say "I don't know."
 
         Context:
         {context}
@@ -60,6 +65,7 @@ def build_rag_chain(vectorstore):
     return rag_chain
 
 
+# ------------------ Pipeline Entry ------------------
 def create_rag_pipeline(documents):
     chunks = split_documents(documents)
     embeddings = create_embeddings()
