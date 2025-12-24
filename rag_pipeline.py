@@ -41,7 +41,7 @@ def build_vectorstore(chunks, embeddings):
 
 # ------------------ RAG Chain (LCEL – Modern & Stable) ------------------
 def build_rag_chain(vectorstore):
-    retriever = vectorstore.as_retriever()
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-pro",
@@ -50,8 +50,8 @@ def build_rag_chain(vectorstore):
 
     prompt = ChatPromptTemplate.from_template(
         """
-        Answer the question using ONLY the context provided below.
-        If the answer is not present in the context, say "I don't know."
+        Use the context below to answer the question.
+        If the answer is not in the context, say "I don't know".
 
         Context:
         {context}
@@ -72,6 +72,7 @@ def build_rag_chain(vectorstore):
     )
 
     return rag_chain
+
 
 
 # ------------------ Pipeline Entry ------------------
