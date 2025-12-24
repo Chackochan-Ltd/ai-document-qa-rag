@@ -39,7 +39,7 @@ if uploaded_file is not None:
 
     if question:
         with st.spinner("Generating answer..."):
-            response = qa_chain.invoke({"input": question})
+           answer = qa_chain.invoke(question)
 
         st.subheader("Answer")
-        st.write(response["answer"])
+        st.write(answer)

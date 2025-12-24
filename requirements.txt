@@ -8,3 +8,9 @@ streamlit
 python-dotenv
 tiktoken
 langchain-google-genai
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-google-genai
+faiss-cpu
+pypdf

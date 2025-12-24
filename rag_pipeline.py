@@ -6,9 +6,9 @@ from langchain_google_genai import (
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from langchain.chains.combine_documents.stuff import create_stuff_documents_chain
-from langchain.chains.retrieval import create_retrieval_chain
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 
 
 def split_documents(documents):
@@ -28,6 +28,8 @@ def build_vectorstore(chunks, embeddings):
 
 
 def build_rag_chain(vectorstore):
+    retriever = vectorstore.as_retriever()
+
     llm = ChatGoogleGenerativeAI(
         model="gemini-pro",
         temperature=0
@@ -35,26 +37,31 @@ def build_rag_chain(vectorstore):
 
     prompt = ChatPromptTemplate.from_template(
         """
-        Answer the question based only on the provided context.
+        Answer the question using ONLY the context below.
 
         Context:
         {context}
 
         Question:
-        {input}
+        {question}
         """
     )
 
-    document_chain = create_stuff_documents_chain(llm, prompt)
+    rag_chain = (
+        {
+            "context": retriever,
+            "question": RunnablePassthrough()
+        }
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
 
-    retriever = vectorstore.as_retriever()
-
-    return create_retrieval_chain(retriever, document_chain)
+    return rag_chain
 
 
 def create_rag_pipeline(documents):
     chunks = split_documents(documents)
     embeddings = create_embeddings()
     vectorstore = build_vectorstore(chunks, embeddings)
-    rag_chain = build_rag_chain(vectorstore)
-    return rag_chain
+    return build_rag_chain(vectorstore)
