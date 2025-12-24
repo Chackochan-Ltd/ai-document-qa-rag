@@ -1,4 +1,6 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.llms import HuggingFacePipeline
+from transformers import pipeline
+
 
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -43,10 +45,13 @@ def build_vectorstore(chunks, embeddings):
 def build_rag_chain(vectorstore):
     retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-pro",
-        temperature=0
+    hf_pipeline = pipeline(
+        "text-generation",
+        model="google/flan-t5-base",
+        max_new_tokens=256
     )
+
+    llm = HuggingFacePipeline(pipeline=hf_pipeline)
 
     prompt = ChatPromptTemplate.from_template(
         """
