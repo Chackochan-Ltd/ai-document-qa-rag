@@ -1,7 +1,3 @@
-from langchain_community.llms import HuggingFacePipeline
-from transformers import pipeline
-
-
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -10,8 +6,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
+from langchain_community.llms import HuggingFacePipeline
+from transformers import pipeline
 
-# ------------------ Document Chunking ------------------
+
+# ----------- Split PDF into chunks -----------
 def split_documents(documents):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
@@ -20,28 +19,25 @@ def split_documents(documents):
     return splitter.split_documents(documents)
 
 
-# ------------------ Embeddings (LOCAL, STABLE) ------------------
+# ----------- Local embeddings (stable) -----------
 def create_embeddings():
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
 
-# ------------------ Vector Store ------------------
+# ----------- Vector Store -----------
 def build_vectorstore(chunks, embeddings):
     texts = [doc.page_content for doc in chunks if doc.page_content.strip()]
-
     if not texts:
         raise ValueError(
-            "No text could be extracted from the PDF. "
-            "The document may be scanned or image-based."
+            "I could not read text from this PDF. "
+            "It may be scanned or image-based."
         )
-
     return FAISS.from_texts(texts, embeddings)
 
 
-
-# ------------------ RAG Chain (LCEL – Modern & Stable) ------------------
+# ----------- RAG Chain -----------
 def build_rag_chain(vectorstore):
     retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
@@ -50,27 +46,26 @@ def build_rag_chain(vectorstore):
         model="google/flan-t5-base",
         max_new_tokens=256
     )
-
     llm = HuggingFacePipeline(pipeline=hf_pipeline)
 
     prompt = ChatPromptTemplate.from_template(
         """
 You are a helpful study assistant.
 
-Answer the question ONLY using the information from the document.
+Answer ONLY using the information from the document.
 
-RULES:
-- Use bullet points
-- Use short, simple sentences
+Guidelines:
+- Write in bullet points
+- Each bullet must be on a new line
+- Use short and simple sentences
 - Explain in easy language
-- Give examples if possible
-- Do NOT repeat the context
-- Do NOT mention the word "context"
+- Add a real-life example if possible
+- Do NOT repeat the document text
 
-If the answer is not present in the document, say:
+If the answer is not present, say:
 "I have no clue. Please ask something that is within this PDF."
 
-Document Content:
+Document:
 {context}
 
 Question:
@@ -81,7 +76,7 @@ Question:
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
 
-    rag_chain = (
+    return (
         {
             "context": retriever | format_docs,
             "question": RunnablePassthrough()
@@ -91,10 +86,8 @@ Question:
         | StrOutputParser()
     )
 
-    return rag_chain
 
-
-# ------------------ Pipeline Entry ------------------
+# ----------- Entry Point -----------
 def create_rag_pipeline(documents):
     chunks = split_documents(documents)
     embeddings = create_embeddings()
