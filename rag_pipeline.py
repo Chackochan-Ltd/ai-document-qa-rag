@@ -49,29 +49,33 @@ def build_rag_chain(vectorstore):
     llm = HuggingFacePipeline(pipeline=hf_pipeline)
 
     prompt = ChatPromptTemplate.from_template(
-        """
-You are a helpful study assistant.
+    """
+You are an AI assistant.
 
-Answer ONLY using the information from the document.
+Your task:
+Understand the question and answer it using ONLY the information found in the document.
 
-Guidelines:
-- Write in bullet points
-- Each bullet must be on a new line
-- Use short and simple sentences
-- Explain in easy language
-- Add a real-life example if possible
-- Do NOT repeat the document text
+IMPORTANT:
+- Do NOT include instructions
+- Do NOT include explanations about how you answered
+- Do NOT repeat the question
+- Do NOT mention the document or rules
+- Return ONLY the final answer content
+- Format the answer strictly as bullet points.
 
-If the answer is not present, say:
-"I have no clue. Please ask something that is within this PDF."
+If the answer is not present in the document, return exactly this sentence:
+I have no clue. Please ask something that is within this PDF.
 
 Document:
 {context}
 
 Question:
 {question}
+
+Final Answer:
 """
-    )
+)
+
 
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
