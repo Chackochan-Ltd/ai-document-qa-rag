@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader
 from rag_pipeline import create_rag_pipeline
@@ -15,6 +16,41 @@ if "qa_chain" not in st.session_state:
 
 if "history" not in st.session_state:
     st.session_state.history = []
+
+
+# ---------- QUESTION INTENT ----------
+def is_explanatory_question(question: str) -> bool:
+    keywords = [
+        "explain", "describe", "why", "how",
+        "elaborate", "in detail", "purpose"
+    ]
+    q = question.lower()
+    return any(k in q for k in keywords)
+
+
+# ---------- ANSWER FORMATTER ----------
+def format_answer(answer: str, question: str) -> str:
+    if not answer or not answer.strip():
+        return "I have no clue. Please ask something that is within this PDF."
+
+    # Paragraph mode
+    if is_explanatory_question(question):
+        return re.sub(r"\s+", " ", answer).strip()
+
+    # Bullet mode
+    answer = re.sub(r"[•\-–·]", ".", answer)
+    sentences = re.split(r"\.\s+", answer)
+
+    bullets = []
+    for s in sentences:
+        s = s.strip()
+        if len(s) > 8 and s.lower() not in [b.lower() for b in bullets]:
+            bullets.append(s)
+
+    if not bullets:
+        return "I have no clue. Please ask something that is within this PDF."
+
+    return "\n".join(f"• {b}" for b in bullets)
 
 
 # ---------- FILE UPLOAD ----------
@@ -42,12 +78,13 @@ if st.session_state.qa_chain:
 
     if question:
         with st.spinner("Generating answer..."):
-            answer = st.session_state.qa_chain.invoke(question)
+            raw_answer = st.session_state.qa_chain.invoke(question)
+            final_answer = format_answer(raw_answer, question)
 
-        st.session_state.history.append((question, answer))
+        st.session_state.history.append((question, final_answer))
 
 
-# ---------- DISPLAY RESULTS ----------
+# ---------- DISPLAY HISTORY ----------
 for q, a in reversed(st.session_state.history):
     with st.container():
         st.markdown(
@@ -59,10 +96,8 @@ for q, a in reversed(st.session_state.history):
                 margin-bottom:15px;
                 background-color:#111;
             ">
-                <b>Question:</b><br>
-                {q}<br><br>
-                <b>Answer:</b><br>
-                {a.replace('-', '•')}
+                <b>Question:</b><br>{q}<br><br>
+                <b>Answer:</b><br>{a.replace(chr(10), '<br>')}
             </div>
             """,
             unsafe_allow_html=True
