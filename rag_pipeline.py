@@ -14,7 +14,7 @@ from langchain_core.output_parsers import BaseOutputParser
 # ------------------ CLEAN OUTPUT PARSER ------------------
 class CleanBulletParser(BaseOutputParser):
     def parse(self, text: str) -> str:
-        # Remove any leaked prompt or instruction text
+        # Remove any accidental instruction leakage
         blacklist = [
             "Human:",
             "You are",
@@ -33,38 +33,33 @@ class CleanBulletParser(BaseOutputParser):
             text = re.sub(rf"{item}.*", "", text, flags=re.IGNORECASE)
 
         # Normalize separators
-        text = text.replace("•", ".")
-        text = text.replace("·", ".")
-        text = text.replace("–", ".")
-        text = text.replace("-", ".")
+        text = re.sub(r"[•\-–·]", ".", text)
 
-        # Split into sentences
+        # Split into clean sentences
         sentences = re.split(r"\.\s+", text)
 
-        # Clean, deduplicate, and order bullets
         bullets = []
         for s in sentences:
             s = s.strip()
-            if len(s) > 6 and s.lower() not in [b.lower() for b in bullets]:
+            if len(s) > 8 and s.lower() not in [b.lower() for b in bullets]:
                 bullets.append(s)
 
         if not bullets:
             return "I have no clue. Please ask something that is within this PDF."
 
-        # Force one bullet per line
         return "\n".join(f"• {b}" for b in bullets)
 
 
-# ------------------ SPLIT DOCUMENT ------------------
+# ------------------ DOCUMENT SPLITTING ------------------
 def split_documents(documents):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
+        chunk_size=600,
         chunk_overlap=100
     )
     return splitter.split_documents(documents)
 
 
-# ------------------ LOCAL EMBEDDINGS ------------------
+# ------------------ EMBEDDINGS ------------------
 def create_embeddings():
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -74,13 +69,10 @@ def create_embeddings():
 # ------------------ VECTOR STORE ------------------
 def build_vectorstore(chunks, embeddings):
     texts = [doc.page_content for doc in chunks if doc.page_content.strip()]
-
     if not texts:
         raise ValueError(
-            "I could not read text from this PDF. "
-            "It may be scanned or image-based."
+            "I could not read text from this PDF. It may be scanned or image-based."
         )
-
     return FAISS.from_texts(texts, embeddings)
 
 
@@ -88,36 +80,23 @@ def build_vectorstore(chunks, embeddings):
 def build_rag_chain(vectorstore):
     retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
-    hf_pipeline = pipeline(
-        "text-generation",
-        model="google/flan-t5-base",
-        max_new_tokens=256,
+    # ✅ BART summarization model (NO PROMPT ECHO)
+    summarizer = pipeline(
+        "summarization",
+        model="facebook/bart-large-cnn",
+        max_length=180,
+        min_length=60,
         do_sample=False
     )
 
-    llm = HuggingFacePipeline(pipeline=hf_pipeline)
+    llm = HuggingFacePipeline(pipeline=summarizer)
 
     prompt = ChatPromptTemplate.from_template(
         """
-Summarize the document content to answer the question.
-
-Requirements:
-- Answer only what the question asks
-- Summarize, do not copy sentences
-- Use simple language
-- Return clear bullet points
-- Each bullet must express one idea
-
-If the answer is not found, return exactly:
-I have no clue. Please ask something that is within this PDF.
-
-Document:
 {context}
 
 Question:
 {question}
-
-Answer:
 """
     )
 
