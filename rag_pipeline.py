@@ -11,10 +11,26 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import BaseOutputParser
 
 
-# ------------------ CLEAN OUTPUT PARSER ------------------
-class CleanBulletParser(BaseOutputParser):
-    def parse(self, text: str) -> str:
-        # Remove any accidental instruction leakage
+# ------------------ QUESTION INTENT DETECTOR ------------------
+def is_explanatory_question(question: str) -> bool:
+    keywords = [
+        "explain",
+        "describe",
+        "elaborate",
+        "why",
+        "how",
+        "in detail",
+        "how does",
+        "purpose",
+    ]
+    q = question.lower()
+    return any(k in q for k in keywords)
+
+
+# ------------------ CLEAN & ADAPTIVE OUTPUT PARSER ------------------
+class CleanAnswerParser(BaseOutputParser):
+    def parse(self, text: str, question: str) -> str:
+        # Remove leaked instructions or prompt text
         blacklist = [
             "Human:",
             "You are",
@@ -32,10 +48,18 @@ class CleanBulletParser(BaseOutputParser):
         for item in blacklist:
             text = re.sub(rf"{item}.*", "", text, flags=re.IGNORECASE)
 
-        # Normalize separators
-        text = re.sub(r"[•\-–·]", ".", text)
+        text = text.strip()
 
-        # Split into clean sentences
+        if not text:
+            return "I have no clue. Please ask something that is within this PDF."
+
+        # ------------------ PARAGRAPH MODE ------------------
+        if is_explanatory_question(question):
+            text = re.sub(r"\s+", " ", text)
+            return text.strip()
+
+        # ------------------ BULLET MODE ------------------
+        text = re.sub(r"[•\-–·]", ".", text)
         sentences = re.split(r"\.\s+", text)
 
         bullets = []
@@ -59,7 +83,7 @@ def split_documents(documents):
     return splitter.split_documents(documents)
 
 
-# ------------------ EMBEDDINGS ------------------
+# ------------------ LOCAL EMBEDDINGS ------------------
 def create_embeddings():
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -69,10 +93,12 @@ def create_embeddings():
 # ------------------ VECTOR STORE ------------------
 def build_vectorstore(chunks, embeddings):
     texts = [doc.page_content for doc in chunks if doc.page_content.strip()]
+
     if not texts:
         raise ValueError(
             "I could not read text from this PDF. It may be scanned or image-based."
         )
+
     return FAISS.from_texts(texts, embeddings)
 
 
@@ -80,12 +106,12 @@ def build_vectorstore(chunks, embeddings):
 def build_rag_chain(vectorstore):
     retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
-    # ✅ BART summarization model (NO PROMPT ECHO)
+    # Summarization model (NO prompt echo)
     summarizer = pipeline(
         "summarization",
         model="facebook/bart-large-cnn",
-        max_length=180,
-        min_length=60,
+        max_length=200,
+        min_length=80,
         do_sample=False
     )
 
@@ -103,15 +129,24 @@ Question:
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
 
-    return (
+    def final_output(inputs):
+        raw_answer = inputs["answer"]
+        question = inputs["question"]
+        return CleanAnswerParser().parse(raw_answer, question)
+
+    rag_chain = (
         {
             "context": retriever | format_docs,
             "question": RunnablePassthrough()
         }
         | prompt
         | llm
-        | CleanBulletParser()
+        | (lambda answer, q=RunnablePassthrough(): final_output(
+            {"answer": answer, "question": q}
+        ))
     )
+
+    return rag_chain
 
 
 # ------------------ ENTRY POINT ------------------
