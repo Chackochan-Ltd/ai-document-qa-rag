@@ -1,4 +1,6 @@
 # 📄 AI Document Q&A Assistant (RAG-based)
+## 🌐 Live Demo
+https://ai-document-app-rag-5tlazrsgzsysohmh8xyusz.streamlit.app/
 
 An intelligent **AI-powered Document Question & Answer system** that allows users to upload a PDF (notes, PPT exports, documents) and ask questions in natural language.
 
