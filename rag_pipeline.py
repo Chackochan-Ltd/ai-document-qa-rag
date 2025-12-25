@@ -11,10 +11,10 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import BaseOutputParser
 
 
-# ------------------ Custom Output Parser ------------------
+# ------------------ CLEAN OUTPUT PARSER ------------------
 class CleanBulletParser(BaseOutputParser):
     def parse(self, text: str) -> str:
-        # Remove instruction/prompt leakage
+        # Remove any leaked prompt or instruction text
         blacklist = [
             "Human:",
             "You are",
@@ -24,24 +24,38 @@ class CleanBulletParser(BaseOutputParser):
             "Document:",
             "Question:",
             "Answer:",
-            "Final Answer:"
+            "Summarize",
+            "ONLY",
+            "Return",
         ]
 
         for item in blacklist:
             text = re.sub(rf"{item}.*", "", text, flags=re.IGNORECASE)
 
-        # Split into sentences
-        lines = re.split(r"[•\-\n]+", text)
-        clean_lines = [line.strip() for line in lines if len(line.strip()) > 5]
+        # Normalize separators
+        text = text.replace("•", ".")
+        text = text.replace("·", ".")
+        text = text.replace("–", ".")
+        text = text.replace("-", ".")
 
-        if not clean_lines:
+        # Split into sentences
+        sentences = re.split(r"\.\s+", text)
+
+        # Clean, deduplicate, and order bullets
+        bullets = []
+        for s in sentences:
+            s = s.strip()
+            if len(s) > 6 and s.lower() not in [b.lower() for b in bullets]:
+                bullets.append(s)
+
+        if not bullets:
             return "I have no clue. Please ask something that is within this PDF."
 
-        # Force bullet points
-        return "\n".join(f"• {line}" for line in clean_lines)
+        # Force one bullet per line
+        return "\n".join(f"• {b}" for b in bullets)
 
 
-# ------------------ Document Chunking ------------------
+# ------------------ SPLIT DOCUMENT ------------------
 def split_documents(documents):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
@@ -50,14 +64,14 @@ def split_documents(documents):
     return splitter.split_documents(documents)
 
 
-# ------------------ Local Embeddings ------------------
+# ------------------ LOCAL EMBEDDINGS ------------------
 def create_embeddings():
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
 
-# ------------------ Vector Store ------------------
+# ------------------ VECTOR STORE ------------------
 def build_vectorstore(chunks, embeddings):
     texts = [doc.page_content for doc in chunks if doc.page_content.strip()]
 
@@ -70,7 +84,7 @@ def build_vectorstore(chunks, embeddings):
     return FAISS.from_texts(texts, embeddings)
 
 
-# ------------------ RAG Chain ------------------
+# ------------------ RAG CHAIN ------------------
 def build_rag_chain(vectorstore):
     retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
@@ -85,7 +99,17 @@ def build_rag_chain(vectorstore):
 
     prompt = ChatPromptTemplate.from_template(
         """
-Answer the question using ONLY the information from the document.
+Summarize the document content to answer the question.
+
+Requirements:
+- Answer only what the question asks
+- Summarize, do not copy sentences
+- Use simple language
+- Return clear bullet points
+- Each bullet must express one idea
+
+If the answer is not found, return exactly:
+I have no clue. Please ask something that is within this PDF.
 
 Document:
 {context}
@@ -100,7 +124,7 @@ Answer:
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
 
-    rag_chain = (
+    return (
         {
             "context": retriever | format_docs,
             "question": RunnablePassthrough()
@@ -110,10 +134,8 @@ Answer:
         | CleanBulletParser()
     )
 
-    return rag_chain
 
-
-# ------------------ Pipeline Entry ------------------
+# ------------------ ENTRY POINT ------------------
 def create_rag_pipeline(documents):
     chunks = split_documents(documents)
     embeddings = create_embeddings()
