@@ -55,20 +55,35 @@ def build_rag_chain(vectorstore):
 
     prompt = ChatPromptTemplate.from_template(
         """
-        Use the context below to answer the question.
-        If the answer is not in the context, say "I don't know".
+You are a helpful study assistant.
 
-        Context:
-        {context}
+Answer the question ONLY using the information from the document.
 
-        Question:
-        {question}
-        """
+RULES:
+- Use bullet points
+- Use short, simple sentences
+- Explain in easy language
+- Give examples if possible
+- Do NOT repeat the context
+- Do NOT mention the word "context"
+
+If the answer is not present in the document, say:
+"I have no clue. Please ask something that is within this PDF."
+
+Document Content:
+{context}
+
+Question:
+{question}
+"""
     )
+
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
 
     rag_chain = (
         {
-            "context": retriever,
+            "context": retriever | format_docs,
             "question": RunnablePassthrough()
         }
         | prompt
@@ -77,7 +92,6 @@ def build_rag_chain(vectorstore):
     )
 
     return rag_chain
-
 
 
 # ------------------ Pipeline Entry ------------------
